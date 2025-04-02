@@ -1,4 +1,5 @@
 import random
+import pandas as pd
 
 def get_raw(pref_list, watched_list, train_news_reduced):
     movies_bundel = []
@@ -46,31 +47,43 @@ def get_filtered(pref_list, liked_list, watched_list, train_news_reduced, cosine
     return result_articles
 
 
-def pred_article(user_profiles, user_liked, user_watched, train_news_reduced, cosine_df, n_iter=5,):
+def pred_article(user_profiles, user_liked, user_watched, train_news_reduced, cosine_df):
+    # Initialiser un dictionnaire pour stocker les articles générés par utilisateur
+    news_dict = {}
+
     for user_id in user_profiles.index:
-        for _ in range(n_iter):  # 5 itérations
-            prefs = user_profiles.loc[user_id, "pref"]
-            liked = user_liked.loc[user_id, "liked"]
-            watched = user_watched.loc[user_id, "watched"]
+        prefs = user_profiles.loc[user_id, "pref"]
+        liked = user_liked.loc[user_id, "liked"]
+        watched = user_watched.loc[user_id, "watched"]
 
-            # Obtenir 2 articles par catégorie (max 6)
-            if not liked:
-                news = get_raw(prefs, watched, train_news_reduced)
-            else:
-                news = get_filtered(prefs, liked, watched, train_news_reduced, cosine_df)
+        # Obtenir 2 articles par catégorie (max 6)
+        if not liked:
+            news = get_raw(prefs, watched, train_news_reduced)
+        else:
+            news = get_filtered(prefs, liked, watched, train_news_reduced, cosine_df)
 
-            # Limiter à 6 articles uniques
-            news = list(set(news))[:6]
+        # Limiter à 6 articles uniques
+        news = list(set(news))[:6]
 
-            # Mettre à jour watched sans doublons
-            watched = list(set(watched + news))
-            user_watched.loc[user_id, "watched"] = watched
+        # Mettre à jour watched sans doublons
+        watched = list(set(watched + news))
+        user_watched.loc[user_id, "watched"] = watched
 
-            # Sélectionner 2 articles à liker au max
-            to_like = random.sample(news, min(2, len(news)))
-            liked = list(set(liked + to_like))
-            user_liked.loc[user_id, "liked"] = liked
+        # Sélectionner 2 articles à liker au max
+        to_like = random.sample(news, min(2, len(news)))
+        liked = list(set(liked + to_like))
+        user_liked.loc[user_id, "liked"] = liked
 
-    return user_liked, user_watched
+        # Ajouter les articles générés pour cet utilisateur dans le dictionnaire
+        news_dict[user_id] = news
+
+    # Convertir le dictionnaire en DataFrame
+    all_news = pd.DataFrame(list(news_dict.items()), columns=['user_id', 'recommended_news'])
+
+    # Retourner les DataFrames mis à jour et le DataFrame all_news
+    return user_liked, user_watched, all_news
+
+
+
 
 

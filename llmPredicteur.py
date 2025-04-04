@@ -2,6 +2,7 @@ import random
 import ollama
 import pandas as pd
 
+
 def build_prompt(user_id, prefs, liked, watched, train_news_reduced):
     prompt = f"""Tu es un assistant intelligent qui recommande des articles à lire.
 Voici les préférences de l'utilisateur {user_id} : {prefs}.
@@ -38,32 +39,36 @@ def ask_llm(prompt, model="mistral"):
         return ""
 
 
+import re
+
+
 def parse_llm_response(response, valid_ids):
-    ids = []
-    for item in response.replace("\n", ",").split(","):
-        item = item.strip()
-        if item in valid_ids:
-            ids.append(item)
-    return ids[:6]
+    # Utiliser une regex pour ne récupérer que les IDs corrects
+    ids = re.findall(r'N\d+', response)  # Capturer uniquement les IDs au format N12345
+
+    # Filtrer pour ne garder que les IDs qui existent dans les articles candidats
+    ids = [item for item in ids if item in valid_ids]
+
+    return ids[:6]  # Limiter à 6 recommandations
 
 
 def pred_article_llm(user_profiles, user_liked, user_watched, train_news_reduced, model="mistral", n_iter=5):
     for user_id in user_profiles.index:
-        for _ in range(n_iter):
-            prefs = user_profiles.loc[user_id, "pref"]
-            liked = user_liked.loc[user_id, "liked"]
-            watched = user_watched.loc[user_id, "watched"]
+        prefs = user_profiles.loc[user_id, "pref"]
+        liked = user_liked.loc[user_id, "liked"]
+        watched = user_watched.loc[user_id, "watched"]
 
-            prompt, valid_ids = build_prompt(user_id, prefs, liked, watched, train_news_reduced)
-            llm_response = ask_llm(prompt, model)
-            recommended_ids = parse_llm_response(llm_response, valid_ids)
+        prompt, valid_ids = build_prompt(user_id, prefs, liked, watched, train_news_reduced)
+        llm_response = ask_llm(prompt, model)
+        recommended_ids = parse_llm_response(llm_response, valid_ids)
+        news_dict[user_id] = recommended_ids
+        # Mettre à jour watched et liked
+        watched = list(set(watched + recommended_ids))
+        user_watched.loc[user_id, "watched"] = watched
 
-            # Mettre à jour watched et liked
-            watched = list(set(watched + recommended_ids))
-            user_watched.loc[user_id, "watched"] = watched
+        to_like = random.sample(recommended_ids, min(2, len(recommended_ids)))
+        liked = list(set(liked + to_like))
+        user_liked.loc[user_id, "liked"] = liked
 
-            to_like = random.sample(recommended_ids, min(2, len(recommended_ids)))
-            liked = list(set(liked + to_like))
-            user_liked.loc[user_id, "liked"] = liked
-
-    return user_liked, user_watched
+    all_news = pd.DataFrame(list(news_dict.items()), columns=['user_id', 'recommended_news'])
+    return user_liked, user_watched, all_news

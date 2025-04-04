@@ -53,6 +53,7 @@ def parse_llm_response(response, valid_ids):
 
 
 def pred_article_llm(user_profiles, user_liked, user_watched, train_news_reduced, model="mistral", n_iter=5):
+    news_dict = {}
     for user_id in user_profiles.index:
         prefs = user_profiles.loc[user_id, "pref"]
         liked = user_liked.loc[user_id, "liked"]
